@@ -1,0 +1,21 @@
+从
+https://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/5/RPMS/x86_64/
+下载所需的包
+mkdir cdhpack5.15
+cd cdhpack5.15
+wget https://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/5/RPMS/x86_64/impala-2.12.0+cdh5.15.0+0-1.cdh5.15.0.p0.52.el6.x86_64.rpm
+把包都下载下来
+
+#创建repodata
+createrepo ../cdhpack5.15
+#创建repo文件
+vi cloudera-cdh5.repo
+----
+[cloudera-cdh5]
+# Packages for Cloudera's Distribution for Hadoop, Version 5, on RedHat or CentOS 6 x86_64
+name=Cloudera's Distribution for Hadoop, Version 5
+baseurl=http://180.97.172.116/cdhpack5.15
+#gpgkey =https://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/RPM-GPG-KEY-cloudera
+gpgcheck = 0
+====
+yum list|grep impala

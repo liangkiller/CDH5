@@ -1,0 +1,72 @@
+yum install hadoop-yarn-resourcemanager -y
+yum install hadoop-hdfs-namenode -y
+yum install hadoop-hdfs-secondarynamenode -y
+#除了 Resource Manager以外的机子上装这些
+yum install hadoop-yarn-nodemanager hadoop-hdfs-datanode hadoop-mapreduce -y
+yum install hadoop-mapreduce-historyserver hadoop-yarn-proxyserver -y
+#安装 hadoop-client
+yum install hadoop-client -y
+
+mkdir -p /opt/hadoop/tmp/dfs/{name,data}
+
+chown -R hdfs:hdfs /opt/hadoop/
+修改配置文件
+vi /etc/hadoop/conf/core-site.xml
+----
+<configuration>
+<property>
+    <name>hadoop.tmp.dir</name>
+    <value>file:/opt/hadoop/tmp</value>
+    <description>Abase for other temporary directories.</description>
+</property>
+<property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://localhost:9000</value>
+</property>
+</configuration>
+====
+vi /etc/hadoop/conf/hdfs-site.xml
+----
+<configuration>
+<property>
+    <name>dfs.replication</name>
+    <value>1</value>
+</property>
+<property>
+    <name>dfs.namenode.name.dir</name>
+    <value>file:/opt/hadoop/tmp/dfs/name</value>
+</property>
+<property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:/opt/hadoop/tmp/dfs/data</value>
+</property>
+</configuration>
+====
+执行 NameNode 的格式化:
+hdfs namenode -format
+
+
+启动hadoop
+service hadoop-hdfs-namenode start
+service hadoop-hdfs-secondarynamenode start
+service hadoop-hdfs-datanode start
+
+service hadoop-yarn-resourcemanager start
+service hadoop-yarn-nodemanager start
+service hadoop-mapreduce-historyserver start
+
+验证:
+$jps
+17033 NodeManager
+16469 DataNode
+17235 ResourceManager
+17522 JobHistoryServer
+16565 NameNode
+16680 SecondaryNameNode
+17593 Jps
+
+客户端测试
+http://<hadoop server ip>:50070
+
+参考链接:
+https://blog.csdn.net/nsrainbow/article/details/36629741

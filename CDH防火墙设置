@@ -1,0 +1,66 @@
+1 直接关闭防火墙可以跳过
+2 安装时agent要通过端口7180拉取cm server上的parcles,需要可以连通.
+3 安装完成后各服务会用到的端口如下:
+agent
+0.0.0.0:8030 yarn.resourcemanager.scheduler.address(Hadoop IPC port)
+0.0.0.0:8031 yarn.resourcemanager.resource-tracker.address(IPC port)
+0.0.0.0:8032 yarn.resourcemanager.address(Hadoop IPC port)
+0.0.0.0:60000 hbase.master.port(hbase ipc)
+0.0.0.0:7072 zookeeper客户端端口
+0.0.0.0:8033 yarn.resourcemanager.admin.address(Hadoop IPC port)
+0.0.0.0:10020 MapReduce JobHistory Server(Hadoop IPC port)
+0.0.0.0:50020 dfs.datanode.ipc.address(Hadoop IPC port)
+0.0.0.0:9000 Cloudera Manager Agent bebug端口
+0.0.0.0:60010 hbase.master.info.port(web UI)
+0.0.0.0:50090 SecondaryNameNode Web UI 端口(web UI)
+0.0.0.0:9994 Host Monitor 喷嘴端口
+0.0.0.0:9995 CMS Host Monitor 侦听端口
+0.0.0.0:9996 Service Monitor 喷嘴端口(Internal query)
+0.0.0.0:9997 Service Monitor 侦听端口
+0.0.0.0:10000 hive.server2.thrift.port
+0.0.0.0:19888 mapreduce.jobhistory.webapp.address(web UI)
+0.0.0.0:7184 CMS事件发布端口
+0.0.0.0:10033 mapreduce.jobhistory.admin.address(Hadoop IPC port)
+0.0.0.0:7185 CMS事件查询端口
+0.0.0.0:4433
+0.0.0.0:10002 HiveServer2 web ui(web UI)
+0.0.0.0:9010 ZooKeeper JMX port
+0.0.0.0:8020 HDFS NameNode(Hadoop IPC port)
+0.0.0.0:8084 CMS Event Server Web UI 端口(web UI)
+0.0.0.0:10101 CMS Alert Publisher 警报：侦听端口
+0.0.0.0:8022 dfs.namenode.servicerpc-address(Hadoop IPC port)
+0.0.0.0:50070 dfs.namenode.http-address(web UI)
+0.0.0.0:8086 Service Monitor Web UI 端口(web UI)
+0.0.0.0:7191 P2P Parcel 分配端口
+0.0.0.0:8888 hue(web UI)
+0.0.0.0:11000 OOZIE_HTTP_PORT(web UI)
+0.0.0.0:8088 hadoop yarn(web UI)
+0.0.0.0:57817
+0.0.0.0:50010 HDFS DataNode
+0.0.0.0:9083 hive Metastore
+0.0.0.0:50075 DataNode HTTP Web UI 端口(web UI)
+0.0.0.0:8091 Host Monitor Web UI 端口(web UI)
+:::4434
+:::7191
+:::8889 hue https(web UI)
+
+master
+0.0.0.0:60030 hbase.regionserver.info.port(web UI)
+0.0.0.0:8040 yarn.nodemanager.localizer.address(IPC port)
+0.0.0.0:8041 yarn.nodemanager.address(IPC port)
+0.0.0.0:8042 yarn.nodemanager.webapp.address(web UI)
+0.0.0.0:7180 CMS web UI(web UI)
+0.0.0.0:7182 CMS 连接到服务器的代理端口
+0.0.0.0:60020 hbase.regionserver.port(IPC port)
+0.0.0.0:13562
+0.0.0.0:50010 dfs.datanode.address
+0.0.0.0:50075 dfs.datanode.http.address(web UI)'
+0.0.0.0:7183:CMS web UI https(web UI)
+
+其他服务的端口,可以看配置.
+
+需要主从都能互通
+
+iptables配置
+#multiport最多15个
+-A INPUT -s 127.17.12.19 -p tcp -m tcp -m multiport --dports 60010,50090,19888,10002,8084,50070,8086,8888,11000,8088,50075,8091,60030,8042,7180 -j ACCEPT

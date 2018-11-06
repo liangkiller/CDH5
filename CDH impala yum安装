@@ -1,0 +1,96 @@
+impala安装
+
+安装hadoop、hive环境,参考：CDH hadoop yum安装和CDH hive yum 安装
+不支持本地文件系统file:///
+hive 需要开启metastore服务，因为每个impala-server都需要访问metastore
+hive --service metastore &
+
+安装impala
+impala服务基本结构，总的来说 有四种角色
+1.impala-state-store -- 协调服务
+2.impala-catalog --名称服务
+3.impala-server(impalad) 节点服务
+4.impala-shell 交互服务
+其中 state-store和catalog类似于 namenode一般部署在主节点，而impala-server类似于datenode部署在子节点上
+最后impala-shell可以部署在任意几点上。
+
+官方建议为了获得最佳的性能，请在所有的datanode上安装Impalad，也就是 impala + impala-server 。
+在某台机器上同时装上 impala-state-store + impala-catalog
+
+$ sudo yum install impala # Binaries for daemons
+$ sudo yum install impala-server # Service start/stop script
+$ sudo yum install impala-state-store # Service start/stop script
+$ sudo yum install impala-catalog # Service start/stop script
+yum install impala-shell
+
+配置
+把hive-site.xml, core-site.xml, hdfs-site.xml
+这三个文件都拷贝到 /etc/impala/conf 下
+
+#打开"块位置跟踪" （必须打开否则不能启动）
+vi /etc/hadoop/conf/hdfs-site.xml
+----
+<property>
+    <name>dfs.datanode.hdfs-blocks-metadata.enabled</name>
+    <value>true</value>
+</property>
+====
+
+打开 "短路读取"
+所谓的短路读取，就是允许impala把一些信息存储在本地磁盘上，可以加快计算的速度。
+vi /etc/hadoop/conf/hdfs-site.xml
+----
+<property>
+    <name>dfs.client.read.shortcircuit</name>
+    <value>true</value>
+</property>
+<property>
+    <name>dfs.domain.socket.path</name>
+    <value>/var/run/hdfs-sockets/dn._PORT</value>
+</property>
+<property>
+    <name>dfs.client.file-block-storage-locations.timeout.millis</name>
+    <value>10000</value>
+</property>
+====
+
+cp /usr/lib/hive/conf/hive-site.xml /etc/impala/conf
+cp /etc/hadoop/conf/hdfs-site.xml /etc/impala/conf
+cp /etc/hadoop/conf/core-site.xml /etc/impala/conf
+
+修改后重启datanode
+
+配置Impala
+vi /etc/default/impala
+----
+IMPALA_CATALOG_SERVICE_HOST=127.0.0.1
+IMPALA_STATE_STORE_HOST=127.0.0.1
+IMPALA_STATE_STORE_PORT=24000
+IMPALA_BACKEND_PORT=22000
+IMPALA_LOG_DIR=/var/log/impala
+====
+如果打开DUMPS
+----
+ENABLE_CORE_DUMPS=true
+====
+
+
+启动impala服务
+分别启动impala的各个服务
+$ sudo service impala-state-store start
+$ sudo service impala-catalog start
+$ sudo service impala-server start
+
+Impala的日志可以在 http://<hostname>:25000/logs 上查看到
+
+安装 client shell
+yum install impala-shell
+
+Impala还可以利用YARN来控制对机器资源（CPU，内存，I/O等）的占用。
+但是需要用到 Llama。
+Llama这个项目被设计出来的目的就是连接YARN和Impala的
+
+CDH5 之后不再支持Llama。
+
+参考链接：
+https://blog.csdn.net/nsrainbow/article/details/43243389

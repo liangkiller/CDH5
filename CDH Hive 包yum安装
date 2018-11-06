@@ -1,0 +1,102 @@
+#hive 基本包
+yum install hive -y
+#hive metastore
+yum install hive-metastore
+#hive服务端
+yum install hive-server2 -y
+#安装hcatalog
+yum install hive-hcatalog -y
+#如果要跟hbase通讯就安装 hive-hbase
+yum install hive-hbase -y
+
+使用mysql作为metastore数据库
+cp mysql-connector-java-5.1.46-bin.jar /usr/lib/hive/lib/mysql-connector-java.jar
+
+初始化数据库
+/usr/lib/hive/bin/schematool -dbType mysql -initSchema -passWord '111111' -userName root
+
+创建hive用户
+mysql> CREATE USER 'hive'@'metastorehost' IDENTIFIED BY 'mypassword';
+mysql> REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'hive'@'metastorehost';
+mysql> GRANT ALL PRIVILEGES ON metastore.* TO 'hive'@'metastorehost';
+mysql> FLUSH PRIVILEGES;
+
+配置Hive Metastore
+vi /usr/lib/hive/conf/hive-site.xml
+----
+<property>
+    <name>javax.jdo.option.ConnectionURL</name>
+    <value>jdbc:mysql://10.8.111.192:3306/hive?useSSL=false</value>
+    <description>the URL of the MySQL database</description>
+</property>
+<property>
+    <name>javax.jdo.option.ConnectionDriverName</name>
+    <value>com.mysql.jdbc.Driver</value>
+</property>
+<property>
+    <name>javax.jdo.option.ConnectionUserName</name>
+    <value>root</value>
+</property>
+<property>
+    <name>javax.jdo.option.ConnectionPassword</name>
+    <value>111111</value>
+</property>
+<property>
+    <name>datanucleus.autoCreateSchema</name>
+    <value>false</value>
+</property>
+<property>
+    <name>datanucleus.fixedDatastore</name>
+    <value>true</value>
+</property>
+<property>
+    <name>datanucleus.autoStartMechanism</name>
+    <value>SchemaTable</value>
+</property>
+<property>
+    <name>hive.metastore.uris</name>
+    <value>thrift://localhost:9083</value>
+    <description>IP address (or fully-qualified domain name) and port of the metastore host</description>
+</property>
+<property>
+    <name>hive.metastore.schema.verification</name>
+    <value>true</value>
+</property>
+====
+配置HiveServer2,如果有zookeeper
+vi /etc/hive/conf/hive-site.xml
+----
+<property>
+    <name>hive.support.concurrency</name>
+    <description>Enable Hive's Table Lock Manager Service</description>
+    <value>true</value>
+</property>
+<property>
+    <name>hive.zookeeper.quorum</name>
+    <description>Zookeeper quorum used by Hive's Table Lock Manager</description>
+    <value>host1,host2</value>
+</property>
+<property>
+    <name>hive.zookeeper.client.port</name>
+    <value>2222</value>
+    <description>
+    The port at which the clients will connect.
+    </description>
+</property>
+====
+
+启动服务
+启动顺序是 hive-metastore -> hive-server2
+service hive-metastore start
+service hive-server2 start
+
+测试是否安装成功
+netstat -tnlp
+看下9083端口
+
+$ hive
+hive>
+hive> show tables;
+
+参考链接：
+https://blog.csdn.net/nsrainbow/article/details/41748863

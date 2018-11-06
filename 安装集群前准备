@@ -1,0 +1,189 @@
+所有节点配置hostname和解析
+/etc/sysconfig/network 中修改hostname
+/etc/hosts 设置ip解析
+运行hostname HOSTNAME更改
+logout再登录
+
+192.168.115.129 master
+192.168.115.137 slave1
+192.168.115.138 slave2
+
+所有节点SSH免密
+Master（NameNode | JobTracker）作为客户端，要实现无密码公钥认证，连接到服务器Salve（DataNode | Tasktracker）上时，需要在Master上生成一个密钥对，包括一个公钥和一个私钥，而后将公钥复制到所有的Slave上。当Master通过SSH连接Salve时，Salve就会生成一个随机数并用Master的公钥对随机数进行加密，并发送给Master。Master收到加密数之后再用私钥解密，并将解密数回传给Slave，Slave确认解密数无误之后就允许Master进行连接了。这就是一个公钥认证过程，其间不需要用户手工输入密码。
+
+Master机器上生成密码对：
+ssh-keygen -t rsa -P ''
+
+生成其无密码密钥对，生成的密钥对：id_rsa和id_rsa.pub
+生成的在/root/.ssh/或/home/USER/.ssh
+
+把id_rsa.pub追加到授权的key里面去。
+cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+
+把公钥复制所有的Slave机器上
+在slave机上
+ssh-keygen -t rsa -P ''
+cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+将master上的authorized_keys内容加到slave的authorized_keys后面,将slave的authorized_keys的内容加到master
+
+验证
+ssh master
+ssh slave
+
+所有节点半闭selinux
+/etc/selinux/config
+SELINUX=disabled
+setenforce 0
+
+配置所有Slave无密码登录Master
+把Slave的公钥追加到Master的".ssh"文件夹下的"authorized_keys"中
+
+
+所有节点开启NTP服务
+yum install  -y ntp
+chkconfig ntpd on
+
+rm -f /etc/localtime
+ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+对于时钟差异较大的主机，直接启动ntpd服务进行自动调整会无法调整时间，所以在没有启动 ntpd 服务的情况下执行ntpdate和互联网上提供时钟服务的时间服务器进行时间校准
+启动ntpd的时候不能执行ntpdate
+
+ntpdate pool.ntp.org
+hwclock --systohc
+vi /etc/ntp.conf
+----
+server pool.ntp.org
+restrict 192.168.115.0 mask 255.255.255.0 notrust nomodify notrap
+====
+备选时间源
+ntp1.aliyun.com
+time.nist.gov 
+
+slave节点
+vi /etc/ntp.conf
+----
+server master
+server 0.centos.pool.ntp.org iburst
+server 1.centos.pool.ntp.org iburst
+server 2.centos.pool.ntp.org iburst
+server 3.centos.pool.ntp.org iburst
+====
+
+#每个从节点，从master节点同步时间
+ntpdate master
+hwclock --systohc
+
+启动ntpd
+service ntpd start
+
+所有节点关闭防火墙或设置防火墙
+
+JDK安装
+Java有两种不同的实现：OpenJDK 和 Oracle Java。
+这两种实现都基于相同的代码，但 OpenJDK 完全是开源的，而 Oracle Java包含一些专有代码。
+大多数 Java 应用程序都可以在两者之间正常工作，具体以软件的运行环境说明为准。
+
+CM需要JDK1.7（此版本不能使用1.8，CM安装时会重新在线下载1.7）
+卸载系统自带JDK
+rpm -qa |grep java
+yum remove -y java*
+rpm -qa |grep jdk
+yum remove -y jdk*
+
+openJDK 安装
+yum search java | grep openjdk
+#1.6
+yum install java-1.6.0-openjdk-headless java-1.6.0-openjdk java-1.6.0-openjdk-devel
+#1.7
+yum install java-1.7.0-openjdk-headless java-1.7.0-openjdk java-1.7.0-openjdk-devel
+#1.8
+yum install java-1.8.0-openjdk-headless java-1.8.0-openjdk java-1.8.0-openjdk-devel
+(要能执行jar命令，需要安装devel 包，否则基础的openjdk 只有jre而没有bin/)
+验证
+java -version
+
+Oracle Java
+官网下载安装
+
+环境变量
+openjdk
+----
+echo 'export JAVA_HOME=/usr/lib/jvm/java-1.6.0-openjdk-1.6.0.0' > /etc/profile.d/java.sh
+echo 'export JRE_HOME=$JAVA_HOME/jre' >> /etc/profile.d/java.sh
+echo 'export CLASSPATH=$CLASSPATH:$JAVA_HOME/lib:$JRE_HOME/lib' >> /etc/profile.d/java.sh
+echo 'export PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin' >> /etc/profile.d/java.sh
+====
+
+Oracle Java
+----
+echo 'export JAVA_HOME=/usr/java/jdk1.8.0_162' > /etc/profile.d/java.sh
+echo 'export JRE_HOME=$JAVA_HOME/jre' >> /etc/profile.d/java.sh
+echo 'export CLASSPATH=$CLASSPATH:$JAVA_HOME/lib:$JRE_HOME/lib' >> /etc/profile.d/java.sh
+echo 'export PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin' >> /etc/profile.d/java.sh
+====
+生效:
+source /etc/profile
+
+制作本地源
+制作本地源只需在主节点上进行即可
+安装HTTP 服务器，允许 http 服务通过防火墙(永久)
+yum install httpd
+安装本地源制作相关工具
+yum install yum-utils createrepo
+
+下载CM安装包
+https://archive.cloudera.com/cm5/repo-as-tarball/
+解压
+移到目录到网站根目录
+mv cdh5  /var/html/www/
+cdh5里包含有所有必需的repo信息,直接下载repo文件修改
+wget https://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/cloudera-cdh5.repo -O /etc/yum.repos.d/
+----
+[cloudera-cm]
+# Packages for Cloudera's Distribution for cm, Version 5, on RedHat     or CentOS 6 x86_64
+name=Cloudera's Distribution for cm, Version 5
+baseurl=http://ip/cdh5.15/5/
+gpgkey = http://ip/cdh5.15/RPM-GPG-KEY-cloudera    
+gpgcheck = 1
+====
+
+验证
+yum list|grep cloudera-manager-server
+
+软件包本地源
+从
+https://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/5/RPMS/x86_64/
+下载所需的包
+mkdir cdhpack5.15
+cd cdhpack5.15
+wget https://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/5/RPMS/x86_64/impala-2.12.0+cdh5.15.0+0-1.cdh5.15.0.p0.52.el6.x86_64.rpm
+把包都下载下来
+
+#创建repodata
+createrepo ../cdhpack5.15
+#创建repo文件
+vi cloudera-cdh5.repo
+----
+[cloudera-cdh5]
+# Packages for Cloudera's Distribution for Hadoop, Version 5, on RedHat or CentOS 6 x86_64
+name=Cloudera's Distribution for Hadoop, Version 5
+baseurl=http://ip/cdhpack5.15
+#gpgkey =https://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/RPM-GPG-KEY-cloudera
+gpgcheck = 0
+====
+yum list|grep impala
+
+将repo文件分发到slave
+
+yum install bind-utils
+echo 10 > /proc/sys/vm/swappiness
+echo never > /sys/kernel/mm/transparent_hugepage/defrag
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+
+参考链接:
+https://www.cloudera.com/documentation/enterprise/5-5-x/topics/cdh_ig_yumrepo_local_create.html
+https://www.cloudera.com/documentation/enterprise/5-15-x/topics/cm_ig_create_local_package_repo.html
+https://www.mf8.biz/rhel-install-java/

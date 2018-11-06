@@ -1,0 +1,255 @@
+#!/bin/bash
+###cdh集群初始化
+###HOST设置hostname解析
+###节点SSH免密
+###节点半闭selinux
+###时间同步
+###JDK安装
+###下载所需要的软件包
+
+START_TIME=`date +%s`
+
+#环境设置:u 不存在的变量报错;e 发生错误退出;pipefail 管道有错退出
+set -euo pipefail
+
+#########要更改变的变量#######
+###HOST设置
+HOST="
+192.168.11.11 master
+192.168.11.12 slave
+"
+###$HOST没有引号,为当成一行;有引号,会当成多行
+HOST_LAST_FIELD=`echo $HOST | awk '{print $NF}'`
+
+
+
+SSH_PORT="57891"
+
+###SSH设置
+HOSTNAME=`hostname`
+#ssh-keygen -t rsa -N '' -f '/root/.ssh/id_rsa' -C "root@`hostname`"
+PUB_KEY=""
+
+###jdk1.8.0_162 md5验证
+JDK_MD5="781e3779f0c134fb548bde8b8e715e90"
+
+###下载地址
+DOWN_URL=""
+
+if [ -n "${DOWN_URL}" ]; then
+    JDK_URL=${DOWN_URL}/jdk-8u162-linux-x64.tar.gz
+else
+    JDK_URL="https://mail-tp.fareoffice.com/java/jdk-8u162-linux-x64.tar.gz"
+fi
+
+
+###是否SSH
+IS_SSH="true"
+###是否HOST
+IS_HOST="true"
+###是否关闭selinux
+IS_SELX="true"
+###是否时间同步
+IS_NTP="true"
+###是否安装JDK
+IS_JDK="true"
+###是否设置防火墙;true设置,false关闭,none什么也不做
+IS_IPTABLE="true"
+
+###防火墙允许的额外IP
+ALLOW="
+192.168.11.10/27
+";
+
+##############################
+if [ "${IS_SSH}" == "true" ]; then
+    echo "#########SSH设置#######"
+    if [ -z "${PUB_KEY}" ]; then
+        echo "先用ssh-kegen命令生成key: ssh-keygen -t rsa -N '' -f '/root/.ssh/id_rsa' -C 'root@${HOSTNAME}'"
+        echo "然后将id_rsa.pub写入PUB_KEY变量"
+        exit;
+    else
+        if [ ! -f "/root/.ssh/authorized_keys" ]; then
+            echo ${PUB_KEY} > /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+        else
+            echo ${PUB_KEY} >> /root/.ssh/authorized_keys
+        fi
+    fi
+    echo "#########SSH设置完成#######"
+fi
+
+if [ "${IS_HOST}" == "true" ]; then
+    echo "#########HOST设置#######"
+    grep "${HOST_LAST_FIELD}" /etc/hosts  && ISSET="true" || ISSET="false"
+    if [  "$ISSET" == "false" ]; then
+        grep "localhost6" /etc/hosts  && ISSET="true" || ISSET="false"
+        echo "$HOST" |while read LINE
+        do
+            if [  "$ISSET" == "true" ]; then
+                sed -i '/localhost6/a\'"$LINE"''  /etc/hosts
+            else
+                sed -i '/localhost4/a\'"$LINE"''  /etc/hosts
+            fi
+        done
+        echo "#########HOST设置完成#######"
+    else 
+        echo "#########HOST 已设置#######"
+    fi
+fi
+
+if [ "${IS_SELX}" == "true" ]; then
+    echo "#########关闭selinux#######"
+    grep 'SELINUX=disabled' /etc/selinux/config && ISSET="true" || ISSET="false"
+    if [ "$ISSET" == "false" ]; then
+        echo "#########关闭selinux#########"
+        sed -i 's;SELINUX=enforcing;SELINUX=disabled;'  /etc/selinux/config
+        setenforce 0
+    else
+        echo "#########selinux 已关闭#########"
+    fi
+fi
+
+if [ "${IS_NTP}" == "true" ]; then
+    grep 'ntpdate' /var/spool/cron/root && ISSET="true" || ISSET="false"
+    if [ "$ISSET" == "false" ]; then
+        echo "#########时间同步#######"
+        if [ ! -f "/usr/sbin/ntpdate" ]; then
+            yum install  -y ntp
+        fi
+        chkconfig ntpd off
+        service ntpd stop
+        rm -f /etc/localtime
+        ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+        ntpdate ntp1.aliyun.com
+        hwclock --systohc
+        grep 'ntpdate' /var/spool/cron/root && ISSET="true" || ISSET="false"
+        if [ "$ISSET" == "false" ]; then
+            echo "1 */6 * * * ntpdate ntp1.aliyun.com > /dev/null 2>&1" >> /var/spool/cron/root
+        fi
+        echo "#########时间同步完成#######"
+    else
+        echo "#########时间 同步已存在#######"
+    fi
+
+fi
+
+if [ "${IS_JDK}" == "true" ]; then
+    cd /var/tmp
+    if [ ! -d "/usr/java/jdk1.8.0_162" ]; then
+        echo "#########JDK 安装#########"
+        yum remove -y java*
+        yum remove -y jdk*
+        if [ ! -f "jdk-8u162-linux-x64.tar.gz" ]; then
+            wget ${JDK_URL}
+        fi
+
+        MD5NUM=`md5sum jdk-8u162-linux-x64.tar.gz|awk '{print $1}'`
+        if [ "$MD5NUM" == "$JDK_MD5" ]; then
+            tar -zxf jdk-8u162-linux-x64.tar.gz
+            mkdir /usr/java/
+            mv jdk1.8.0_162 /usr/java/
+        else
+            echo "md5 check wrong"
+            exit
+        fi
+        echo "#########JDK 已安装#########"
+    else
+        echo "#########JDK 已存在#########"
+    fi
+
+    echo "#########JDK 环境配置#########"
+    echo 'export JAVA_HOME=/usr/java/jdk1.8.0_162' > /etc/profile.d/java.sh
+    echo 'export JRE_HOME=$JAVA_HOME/jre' >> /etc/profile.d/java.sh
+    echo 'export CLASSPATH=.:$JAVA_HOME/lib:$JRE_HOME/lib' >> /etc/profile.d/java.sh
+    source /etc/profile.d/java.sh
+
+    echo "#########JDK 环境已配置#########"
+    if [ ! -f "/etc/profile.d/path.sh" ]; then
+        echo 'export PATH=$PATH:/sbin:/usr/sbin:/usr/local/sbin:$JAVA_HOME/bin' > /etc/profile.d/path.sh
+    fi
+
+    grep "JAVA_HOME" /etc/profile.d/path.sh && ISSET="true" || ISSET="false"
+    if [  "$ISSET" == "false" ]; then
+        ###在行末插入
+        sed -i '/PATH/ s/$/:\$JAVA_HOME\/bin/' /etc/profile.d/path.sh
+        source /etc/profile.d/path.sh
+    fi
+
+    java -version
+
+fi
+if [ "${IS_IPTABLE}" == "true" ]; then
+    echo "#########防火墙设置#######"
+    ###默认允许所有;限制hadoop端口访问IP
+IPTABLE_INIT="# Generated by iptables-save v1.4.7 on Tue Feb 27 11:32:32 2018
+#默认允许所有;限制hadoop端口访问IP
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+"
+    if [  -f "/etc/sysconfig/iptables" ]; then
+        echo "备份原iptables规则iptables.bak"
+        mv /etc/sysconfig/iptables /etc/sysconfig/iptables.bak
+    fi
+
+    echo "$HOST" | while read line
+    do
+        if [ -n "$line"  ]; then
+            HOST_IP=`echo $line|awk '{print $1}'`
+IPTABLE_ACCEPT_HOST="###HOST
+-A INPUT -s ${HOST_IP} -p tcp -m tcp -m multiport --dports 60010,50090,19888,10002,8084,50070,8086,8888,11000,8088,50075,8091,60030,8042,7180 -j ACCEPT
+-A INPUT -s ${HOST_IP} -p tcp -m tcp -m multiport --dports 873,25020,25010,18088,64689,80,63751,50075,7183,7072,8889,25000,8084,12321,8081 -j ACCEPT
+-A INPUT -s ${HOST_IP} -p tcp -m tcp -m multiport --dports 7182,8050,8051,9095,4040,9868,9864,9870 -j ACCEPT
+"
+        fi
+        echo "${IPTABLE_ACCEPT_HOST}" > /tmp/tmp_IPTABLE_ACCEPT_HOST.txt
+    done
+
+    echo "$ALLOW" | while read line
+    do
+        if [ -n "$line"  ]; then
+            HOST_IP=`echo $line|awk '{print $1}'`
+IPTABLE_ACCEPT_OTHER="###OTHER
+-A INPUT -s ${HOST_IP} -p tcp -m tcp -m multiport --dports 60010,50090,19888,10002,8084,50070,8086,8888,11000,8088,50075,8091,60030,8042,7180 -j ACCEPT
+-A INPUT -s ${HOST_IP} -p tcp -m tcp -m multiport --dports 873,25020,25010,18088,64689,80,63751,50075,7183,7072,8889,25000,8084,12321,8081 -j ACCEPT
+-A INPUT -s ${HOST_IP} -p tcp -m tcp -m multiport --dports 7182,8050,8051,9095,4040,9868,9864,9870 -j ACCEPT
+"
+        fi
+        echo "${IPTABLE_ACCEPT_OTHER}" > /tmp/tmp_IPTABLE_ACCEPT_OTHER.txt
+    done
+
+IPTABLE_DROP="###DROP
+-A INPUT -p tcp -m multiport --dports 60010,50090,19888,10002,8084,50070,8086,8888,11000,8088,50075,8091,60030,8042,7180 -j DROP
+-A INPUT -p tcp -m multiport --dports 873,25020,25010,18088,64689,80,63751,50075,7183,7072,8889,25000,8084,12321,8081 -j DROP
+-A INPUT -p tcp -m multiport --dports 7182,8050,8051,9095,4040,9868,9864,9870 -j DROP
+"
+
+ACCEPT_OTHER=`cat /tmp/tmp_IPTABLE_ACCEPT_OTHER.txt`
+ACCEPT_HOST=`cat /tmp/tmp_IPTABLE_ACCEPT_HOST.txt`
+
+cat > /etc/sysconfig/iptables <<EOF
+${IPTABLE_INIT}
+${ACCEPT_OTHER}
+${ACCEPT_HOST}
+${IPTABLE_DROP}
+COMMIT
+EOF
+
+    service iptables restart
+    chkconfig iptables on
+fi
+
+if [ "${IS_IPTABLE}" == "false" ]; then
+    echo "#########关闭防火墙#######"
+    service iptables stop
+    chkconfig iptables off
+fi
+
+
+echo "=====运行时间为====="
+END_TIME=`date +%s`
+dif=$[ END_TIME - START_TIME ] 
+echo $dif "秒"

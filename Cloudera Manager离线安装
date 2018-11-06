@@ -1,0 +1,147 @@
+非生产环境可以使用内置的postgrSQL,生产环境使用第三方数据
+
+安装前事项
+1 如果不想用内置的PostgreSQL,需要先安装好数据库.
+2 hue需要PYTHON2.6后
+3 完成 安装集群前准备
+4 完成 防火墙设置
+
+下载repo
+wget https://archive.cloudera.com/cm5/redhat/6/x86_64/cm/cloudera-manager.repo -O /etc/yum.repos.d/cloudera-manager.repo
+
+
+主从机器上:
+yum install -y oracle-j2sdk*
+
+master上安装
+yum install -y cloudera-manager-server* cloudera-manager-server-db* cloudera-manager-daemons* cloudera-manager-agent* enterprise-debuginfo*
+
+都会安装postgresql包,可移除.
+默认配置文件/etc/default/cloudera-scm-server
+
+slave上安装
+yum install cloudera-manager-agent*
+
+非生产环境下:
+rm -f /etc/cloudera-scm-server/db.properties
+wget http://archive.cloudera.com/cm5/installer/5.15.0/cloudera-manager-installer.bin
+chmod u+x cloudera-manager-installer.bin
+./cloudera-manager-installer.bin
+根据安装向导一路next。在web浏览器访问 http://master:7180/，
+看是否能打开页面即可。先不要进行登录操作。
+
+生产环境使用mysql做为第三方库
+从 http://www.mysql.com/downloads/connector/j/5.1.html
+下载mysql-connector
+复制到java目录
+cp mysql-connector-java-5.1.46-bin.jar /usr/share/java/mysql-connector-java.jar
+
+在mysql创建数据库和用户
+----
+#Cloudera Manager Server
+create database cmf DEFAULT CHARACTER SET utf8;
+grant all on cmf.* TO 'cmf'@'%' IDENTIFIED BY 'cmf_password';
+grant all on cmf.* TO 'cmf'@'localhost' IDENTIFIED BY 'cmf_password';
+#Activity Monitor(MapReduce service)
+create database amon DEFAULT CHARACTER SET utf8;
+grant all on amon.* TO 'amon'@'%' IDENTIFIED BY 'amon_password';
+grant all on amon.* TO 'amon'@'localhost' IDENTIFIED BY 'amon_password';
+#Reports Manager
+create database rman DEFAULT CHARACTER SET utf8;
+grant all on rman.* TO 'rman'@'%' IDENTIFIED BY 'rman_password';
+grant all on rman.* TO 'rman'@'localhost' IDENTIFIED BY 'rman_password';
+#Cloudera Navigator Audit Server
+create database nav DEFAULT CHARACTER SET utf8;
+grant all on nav.* TO 'nav'@'%' IDENTIFIED BY 'nav_password';
+grant all on nav.* TO 'nav'@'localhost' IDENTIFIED BY 'nav_password';
+#Cloudera Navigator Metadata Server
+create database navms DEFAULT CHARACTER SET utf8;
+grant all on navms.* TO 'navms'@'%' IDENTIFIED BY 'navms_password';
+grant all on navms.* TO 'navms'@'localhost' IDENTIFIED BY 'navms_password';
+#Sentry Server
+create database sentry DEFAULT CHARACTER SET utf8;
+grant all on sentry.* TO 'sentry'@'%' IDENTIFIED BY 'sentry_password';
+grant all on sentry.* TO 'sentry'@'localhost' IDENTIFIED BY 'sentry_password';
+#Hive Metastore Server
+create database hive DEFAULT CHARACTER SET utf8;
+grant all on hive.* TO 'hive'@'%' IDENTIFIED BY 'hive_password';
+grant all on hive.* TO 'hive'@'localhost' IDENTIFIED BY 'hive_password';
+#Oozie
+create database oozie DEFAULT CHARACTER SET utf8;
+grant all on oozie.* TO 'oozie'@'%' IDENTIFIED BY 'oozie_password';
+grant all on oozie.* TO 'oozie'@'localhost' IDENTIFIED BY 'oozie_password';
+#Hue
+create database hue DEFAULT CHARACTER SET utf8;
+grant all on hue.* TO 'hue'@'%' IDENTIFIED BY 'hue_password';
+grant all on hue.* TO 'hue'@'localhost' IDENTIFIED BY 'hue_password';
+
+flush privileges;
+====
+验证下是否可以登录
+# mysql -ucmf -p
+
+修改CM数据库连接配置:
+vi  /etc/cloudera-scm-server/db.properties
+----
+com.cloudera.cmf.db.type=mysql
+com.cloudera.cmf.db.host=localhost:3306
+com.cloudera.cmf.db.name=cmf
+com.cloudera.cmf.db.user=cmf
+com.cloudera.cmf.db.password=cmf_password
+com.cloudera.cmf.db.setupType=EXTERNAL
+====
+注意:
+1 localhost,防火墙要允许回环地址访问
+2 mysql 不能开启GTID,否则会报错:
+Statement violates GTID consistency: 
+CREATE TEMPORARY TABLE and DROP TEMPORARY TABLE can only be executed outside transactional context.  
+These statements are also not allowed in a function or trigger because functions and triggers are also considered to be multi-statement transactions.
+因为GTID是基于事务,临时表不是事务,创建会失败.
+3 如是创表失败,删除cmf中的表,重新启动cloudera-scm-server
+4 hostname 要解析到公网IP,不能解析到127.0.0.1
+5 对/etc/hosts的要求很高,不能有多余和重复
+
+CDH服务安装
+下载相应版本的parcel
+http://archive.cloudera.com/cdh5/parcels
+上传到master的/opt/cloudera/parcel-repo/目录下
+
+cloudera manager安装之后master会在/opt目录下生成cloudera文件夹，将之前下载好的parcel文件移动到parcel-repo文件夹中
+mv CDH-5.14.0-1.cdh5.14.0.p0.24-el7.parcel /opt/cloudera/parcel-repo/
+#注意这里有重命名
+mv CDH-5.14.0-1.cdh5.14.0.p0.24-el7.parcel.sha1 /opt/cloudera/parcel-repo/CDH-5.14.0-1.cdh5.14.0.p0.24-el7.parcel.sha
+
+将cloudera manager的用户授权给/opt和日志目录：
+chown cloudera-scm.cloudera-scm /opt/cloudera -R
+chown cloudera-scm.cloudera-scm /var/log/cloudera-scm-agent -R
+
+cloudera-manager-installer.bin安装的要重启cloudera-scm-server（重要）
+service cloudera-scm-server restart
+
+生产环境下启动cloudera-scm-server
+service cloudera-scm-server start
+启动时会加载各组件,并加载parcel
+通过
+tail -f /var/log/cloudera-scm-server/cloudera-scm-server.log
+查看加载进度
+会从/usr/share/cmf/schema/mysql/加载数据
+
+重启速度较慢，约1分钟后访问 http://master:7180/ 登陆，账号密码 admin
+选择免费版本，一路next开始安装。
+
+通过WEB界面安装hadoop等服务
+下一步中输入master,slave机的hostname,搜索.可以使用通配符,如10.1.1.[1-4],host[07-10].company.com
+下一步中选择安装模式,单用户模式和集群模式.
+下一步中选择是新装JDK还是使用安装好的JDK
+下一步中上传master的id_rsa
+下一步中开始安装,选择parcles安装
+
+安装完成后:
+运行Wordcount例子
+cd /opt/clouera/parcels/CDH
+bin/yarn jar share/doc/hadoop-0.20-mapreduce/examples/hadoop-examples-2.6.0-mr1-cdh5.4.1.jar wordcount /profile /out01
+错误查看
+https://www.cnblogs.com/wangyufu/p/5453235.html
+
+参考链接
+https://blog.csdn.net/chenhai201/article/details/78856007

@@ -1,0 +1,72 @@
+删除Cloudera Manager
+
+步骤:
+1 在WEB管理界面停止集群
+    1.1 停用和移除parcels:右上角图标"Parcel"
+    1.2 停止和删除cluster:查看CLUSTER名称左边的状态,停止和删除cluster
+    1.3 停止和删除CMS:Cloudera Management Service
+2 删除Cloudera Manager
+
+
+一 采用cloudera-manager-installer.bin安装
+    直接运行/usr/share/cmf/uninstall-cloudera-manager.sh可删除
+
+二 采用离线安装安装
+主机:
+//停止服务
+service cloudera-scm-server stop
+service cloudera-scm-server-db stop
+//删除安装包
+yum remove 'cloudera-manager-*' avro-tools crunch flume-ng hadoop-hdfs-fuse hadoop-hdfs-nfs3 hadoop-httpfs hadoop-kms hbase-solr hive-hbase hive-webhcat hue-beeswax hue-hbase hue-impala hue-pig hue-plugins hue-rdbms hue-search hue-spark hue-sqoop hue-zookeeper impala impala-shell kite llama mahout oozie pig pig-udf-datafu search sentry solr-mapreduce spark-core spark-master spark-worker spark-history-server spark-python sqoop sqoop2 whirr hue-common oozie-client solr solr-doc sqoop2-client zookeeper
+yum clean all
+//停止进程
+ps aux|grep java
+
+for u in cloudera-scm flume hadoop hdfs hbase hive httpfs hue impala llama mapred oozie solr spark sqoop sqoop2 yarn zookeeper; do  kill -9 $(ps -u $u -o pid=); done
+//卸载目录
+umount cm_processes
+//删除目录
+rm -rf /usr/share/cmf /var/lib/cloudera* /var/cache/yum/cloudera* /var/log/cloudera* /var/run/cloudera*
+
+//删除PostgreSQL 数据;注意有没有其他应用使用PostgreSQL库
+yum remove -y postgres*
+rm -rf /var/lib/cloudera-scm-server-db
+
+//其他
+rm -f /tmp/.scm_prepare_node.lock
+rm -rf /var/lib/navigator /var/lib/solr /var/lib/zookeeper /var/lib/flume-ng /var/lib/hadoop* /var/lib/hue /var/lib/oozie /var/lib/solr /var/lib/sqoop* /var/lib/impala* /var/lib/hbase* /var/lib/hive* /var/lib/kudu* /var/lib/sentry* /var/lib/spark* /var/lib/hadoop-yarn* /var/lib/pgsql*
+rm -rf /usr/lib/hadoop /usr/lib/hadoop* /usr/lib/hive /usr/lib/hbase /usr/lib/oozie /usr/lib/sqoop* /usr/lib/zookeeper /usr/lib/bigtop* /usr/lib/flume-ng /usr/lib/hcatalog /usr/lib/hue
+rm -rf    /etc/hadoop* /etc/zookeeper* /etc/hive* /etc/hue /etc/impala /etc/sqoop* /etc/oozie /etc/hbase* /etc/hcatalog /etc/cloudera-scm-agent /etc/cloudera-scm-server /etc/spark
+
+//清空数据目录
+rm -rf ${data_drive_path}/{dfs,mapred,yarn,impala,kudu}
+rm -rf /opt/cloudera*
+
+从机(agent):
+//停止服务
+service cloudera-scm-agent hard_stop_confirmed
+//删除安装包
+yum remove 'cloudera-manager-*' avro-tools crunch flume-ng hadoop-hdfs-fuse hadoop-hdfs-nfs3 hadoop-httpfs hadoop-kms hbase-solr hive-hbase hive-webhcat hue-beeswax hue-hbase hue-impala hue-pig hue-plugins hue-rdbms hue-search hue-spark hue-sqoop hue-zookeeper impala impala-shell kite llama mahout oozie pig pig-udf-datafu search sentry solr-mapreduce spark-core spark-master spark-worker spark-history-server spark-python sqoop sqoop2 whirr hue-common oozie-client solr solr-doc sqoop2-client zookeeper
+yum clean all
+//停止进程
+ps aux|grep java
+
+for u in cloudera-scm flume hadoop hdfs hbase hive httpfs hue impala llama mapred oozie solr spark sqoop sqoop2 yarn zookeeper; do  kill -9 $(ps -u $u -o pid=); done
+//卸载目录
+umount cm_processes
+//删除目录
+rm -rf /usr/share/cmf /var/lib/cloudera* /var/cache/yum/cloudera* /var/log/cloudera* /var/run/cloudera*
+
+//删除PostgreSQL 数据;注意有没有其他应用使用PostgreSQL库
+yum remove -y postgres*
+rm -rf /var/lib/cloudera-scm-server-db
+
+//其他
+rm -f /tmp/.scm_prepare_node.lock
+rm -rf /var/lib/navigator /var/lib/solr /var/lib/zookeeper /var/lib/flume-ng /var/lib/hadoop* /var/lib/hue /var/lib/oozie /var/lib/solr /var/lib/sqoop* /var/lib/impala* /var/lib/hbase* /var/lib/hive* /var/lib/kudu* /var/lib/sentry* /var/lib/spark* /var/lib/hadoop-yarn* /var/lib/pgsql*
+rm -rf /usr/lib/hadoop /usr/lib/hadoop* /usr/lib/hive /usr/lib/hbase /usr/lib/oozie /usr/lib/sqoop* /usr/lib/zookeeper /usr/lib/bigtop* /usr/lib/flume-ng /usr/lib/hcatalog /usr/lib/hue
+rm -rf    /etc/hadoop* /etc/zookeeper* /etc/hive* /etc/hue /etc/impala /etc/sqoop* /etc/oozie /etc/hbase* /etc/hcatalog /etc/cloudera-scm-agent /etc/cloudera-scm-server /etc/spark
+
+//清空数据目录
+rm -rf ${data_drive_path}/{dfs,mapred,yarn}
+rm -rf /opt/cloudera*
